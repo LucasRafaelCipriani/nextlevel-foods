@@ -1,16 +1,26 @@
-import sql from 'better-sqlite3';
+import { Pool } from 'pg';
 import slugify from 'slugify';
 import xss from 'xss';
 
 import { Meal } from '@/types/Meal';
 import ImageKit from 'imagekit';
 
-const db = sql('meals.db');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+async function isRepeatedSlug(slug: string): Promise<boolean> {
+  const query = 'SELECT 1 FROM meals WHERE slug = $1 LIMIT 1';
+  const values = [slug];
+  const res = await pool.query(query, values);
+  return (res.rowCount ?? 0) > 0;
+}
 
 export const getMeals = async (): Promise<Meal[]> => {
   try {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    return db.prepare('SELECT * FROM meals').all() as Meal[];
+    await new Promise((r) => setTimeout(r, 2000));
+    const res = await pool.query('SELECT * FROM meals');
+    return res.rows;
   } catch {
     throw new Error('Failed to fetch meal data. Please try again later.');
   }
@@ -18,32 +28,36 @@ export const getMeals = async (): Promise<Meal[]> => {
 
 export const getMeal = async (slug: string): Promise<Meal> => {
   try {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    return db.prepare('SELECT * FROM meals WHERE slug = ?').get(slug) as Meal;
+    const query = 'SELECT * FROM meals WHERE slug = $1';
+    const values = [slug];
+    const res = await pool.query(query, values);
+    await new Promise((r) => setTimeout(r, 2000));
+    return res.rows[0];
   } catch {
     throw new Error('Failed to fetch meal data. Please try again later.');
   }
 };
 
-export const saveMeal = async (meal: Meal): Promise<void> => {
+export const saveMeal = async (
+  meal: Meal & { imageFile?: File }
+): Promise<void> => {
   try {
     meal.slug = slugify(meal.title, { lower: true });
-    const isRepeatedSlug = !!db
-      .prepare('SELECT * FROM meals WHERE slug = ?')
-      .get(meal.slug);
 
-    if (isRepeatedSlug) {
-      meal.slug = slugify(`${meal.title}-${new Date().getTime()}`, {
-        lower: true,
-      });
+    if (await isRepeatedSlug(meal.slug)) {
+      meal.slug = slugify(`${meal.title}-${Date.now()}`, { lower: true });
     }
 
     meal.instructions = xss(meal.instructions);
 
-    const extension = meal?.imageFile?.name.split('.').pop();
-    const fileName = `${meal.slug}-${new Date().getTime()}.${extension}`;
-    const arrayBuffer = await meal?.imageFile?.arrayBuffer();
-    const bufferedImage = arrayBuffer ? Buffer.from(arrayBuffer) : undefined;
+    if (!meal.imageFile) {
+      throw new Error('Image file is missing or could not be processed.');
+    }
+
+    const extension = meal.imageFile.name.split('.').pop();
+    const fileName = `${meal.slug}-${Date.now()}.${extension}`;
+    const arrayBuffer = await meal.imageFile.arrayBuffer();
+    const bufferedImage = Buffer.from(arrayBuffer);
 
     const imagekit = new ImageKit({
       publicKey: process.env.IMAGEKIT_PUBLIC_KEY!,
@@ -51,13 +65,9 @@ export const saveMeal = async (meal: Meal): Promise<void> => {
       urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT!,
     });
 
-    if (!bufferedImage) {
-      throw new Error('Image file is missing or could not be processed.');
-    }
-
     const uploadResult = await imagekit.upload({
       file: bufferedImage,
-      fileName: fileName,
+      fileName,
       folder: 'images',
       useUniqueFileName: true,
       isPrivateFile: false,
@@ -69,23 +79,31 @@ export const saveMeal = async (meal: Meal): Promise<void> => {
 
     meal.image = uploadResult.url;
 
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((r) => setTimeout(r, 2000));
 
-    db.prepare(
-      `
-      INSERT INTO meals
-        (title, summary, instructions, creator, creator_email, image, slug)
-      VALUES (
-        @title,
-        @summary,
-        @instructions,
-        @creator,
-        @creator_email,
-        @image,
-        @slug
-      )
-    `
-    ).run(meal);
+    const query = `
+      INSERT INTO meals (title, summary, instructions, creator, creator_email, image, slug)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (slug) DO UPDATE SET
+        title = EXCLUDED.title,
+        summary = EXCLUDED.summary,
+        instructions = EXCLUDED.instructions,
+        creator = EXCLUDED.creator,
+        creator_email = EXCLUDED.creator_email,
+        image = EXCLUDED.image
+    `;
+
+    const values = [
+      meal.title,
+      meal.summary,
+      meal.instructions,
+      meal.creator,
+      meal.creator_email,
+      meal.image,
+      meal.slug,
+    ];
+
+    await pool.query(query, values);
   } catch {
     throw new Error('Failed to save meal data. Please try again later.');
   }

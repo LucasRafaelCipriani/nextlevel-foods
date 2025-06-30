@@ -1,6 +1,9 @@
-import sql from 'better-sqlite3';
+import { Pool } from 'pg';
+import 'dotenv/config';
 
-const db = sql('meals.db');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 const dummyMeals = [
   {
@@ -137,7 +140,7 @@ const dummyMeals = [
 
       4. Serve:
       Serve hot with a slice of lemon and a side of potato salad or greens.
- `,
+    `,
     creator: 'Franz Huber',
     creator_email: 'franzhuber@example.com',
   },
@@ -165,38 +168,56 @@ const dummyMeals = [
   },
 ];
 
-db.prepare(
-  `
-   CREATE TABLE IF NOT EXISTS meals (
-       id INTEGER PRIMARY KEY AUTOINCREMENT,
-       slug TEXT NOT NULL UNIQUE,
-       title TEXT NOT NULL,
-       image TEXT NOT NULL,
-       summary TEXT NOT NULL,
-       instructions TEXT NOT NULL,
-       creator TEXT NOT NULL,
-       creator_email TEXT NOT NULL
-    )
-`
-).run();
+async function createTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS meals (
+      id SERIAL PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      image TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      instructions TEXT NOT NULL,
+      creator TEXT NOT NULL,
+      creator_email TEXT NOT NULL
+    );
+  `);
+}
 
 async function initData() {
-  const stmt = db.prepare(`
-      INSERT INTO meals VALUES (
-         null,
-         @slug,
-         @title,
-         @image,
-         @summary,
-         @instructions,
-         @creator,
-         @creator_email
-      )
-   `);
+  const query = `
+    INSERT INTO meals 
+      (slug, title, image, summary, instructions, creator, creator_email)
+    VALUES
+      ($1, $2, $3, $4, $5, $6, $7)
+    ON CONFLICT (slug) DO NOTHING;
+  `;
 
   for (const meal of dummyMeals) {
-    stmt.run(meal);
+    const values = [
+      meal.slug,
+      meal.title,
+      meal.image,
+      meal.summary,
+      meal.instructions,
+      meal.creator,
+      meal.creator_email,
+    ];
+    await pool.query(query, values);
   }
 }
 
-initData();
+async function main() {
+  try {
+    console.log('Creating table...');
+    await createTable();
+    console.log('Inserting dummy meals...');
+    await initData();
+    console.log('Done.');
+  } catch (error) {
+    console.error('Something went wrong:', error);
+  } finally {
+    await pool.end();
+  }
+}
+
+main();
