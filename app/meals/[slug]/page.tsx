@@ -1,3 +1,4 @@
+import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Image, ImageKitProvider } from '@imagekit/next';
 
@@ -9,6 +10,22 @@ interface MealPageProps {
     slug: string;
   }>;
 }
+
+export const generateMetadata = async ({
+  params,
+}: MealPageProps): Promise<Metadata> => {
+  const { slug } = await params;
+  const meal = await getMeal(slug);
+
+  if (!meal) {
+    notFound();
+  }
+
+  return {
+    title: meal.title,
+    description: meal.summary,
+  };
+};
 
 const MealPage: React.FC<MealPageProps> = async ({ params }) => {
   const { slug } = await params;

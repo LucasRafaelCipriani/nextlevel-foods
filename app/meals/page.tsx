@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { Metadata } from 'next';
 import Link from 'next/link';
 
 import { getMeals } from '@/lib/meals';
@@ -13,6 +14,11 @@ const Meals: React.FC = async () => {
       <MealsGrid meals={meals} />
     </main>
   );
+};
+
+export const metadata: Metadata = {
+  title: 'All Meals',
+  description: 'Browse the delicious meals shared by our vibrant community.',
 };
 
 const MealsPage: React.FC = () => {
