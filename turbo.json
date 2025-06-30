@@ -1,0 +1,16 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": [".next/**"],
+      "env": [
+        "IMAGEKIT_PUBLIC_KEY",
+        "IMAGEKIT_PRIVATE_KEY",
+        "IMAGEKIT_URL_ENDPOINT"
+      ]
+    },
+    "dev": {
+      "cache": false
+    }
+  }
+}
