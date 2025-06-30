@@ -5,11 +5,11 @@ import Image from 'next/image';
 
 import classes from './image-picker.module.css';
 
-const ImagePicker: React.FC<{ label: string; name: string }> = ({
-  label,
-  name,
-}) => {
-  const imageInput = useRef(null);
+const ImagePicker: React.FC<{
+  label: string;
+  name: string;
+}> = ({ label, name }) => {
+  const imageInput = useRef<HTMLInputElement>(null);
   const [pickedImage, setPickedImage] = useState<string | null>(null);
 
   const handlePickClick = () => {
