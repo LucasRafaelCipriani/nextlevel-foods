@@ -1,5 +1,5 @@
-import Image from 'next/image';
 import { notFound } from 'next/navigation';
+import { Image, ImageKitProvider } from '@imagekit/next';
 
 import classes from './page.module.css';
 import { getMeal } from '@/lib/meals';
@@ -24,7 +24,14 @@ const MealPage: React.FC<MealPageProps> = async ({ params }) => {
     <>
       <header className={classes.header}>
         <div className={classes.image}>
-          <Image src={meal.image} alt={meal.title} fill />
+          <ImageKitProvider urlEndpoint={process.env.IMAGEKIT_URL_ENDPOINT}>
+            <Image
+              src={meal.image}
+              alt={meal.title}
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            />
+          </ImageKitProvider>
         </div>
         <div className={classes.headerText}>
           <h1>{meal.title}</h1>
